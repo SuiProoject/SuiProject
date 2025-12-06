@@ -137,7 +137,6 @@ export default function Home() {
           <p className="text-gray-400 text-sm mb-1">Bakiye</p>
           <p className="text-4xl font-bold mb-8">{balance}</p>
 
-        
           {/* --- BAŞKASINA GÖNDERME INPUTU --- */}
           <input
             type="text"
