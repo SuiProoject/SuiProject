@@ -1,38 +1,31 @@
-/*
-/// Module: module_1
-module module_1::module_1;
-*/
-
-// For Move coding conventions, see
-// https://docs.sui.io/concepts/sui-move-concepts/conventions
-
-
-module {{sender}}::payment {
-
-    use std::error;
-    use std::option;
-    use std::string;
+module module_1::payment {
     use sui::tx_context::{Self, TxContext};
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
+    use sui::transfer;
 
-    /// ADMIN belirle (senin adresin)
+    /// Error code if the caller is not the admin
     const E_NOT_ADMIN: u64 = 1;
 
-    /// SUI transfer eden fonksiyon
+    /// Replace this with your actual Wallet Address found in your Sui wallet
+    const ADMIN_ADDRESS: address = @0xCAFE; 
+
+    /// SUI transfer function
+    /// You must pass a Coin object (payment_coin) to send money.
     public entry fun send_sui(
+        payment_coin: &mut Coin<SUI>, // The coin object from your wallet
         recipient: address,
         amount: u64,
         ctx: &mut TxContext
     ) {
-        // Admin cüzdan kontrolü
-        let sender = TxContext::sender(ctx);
-        assert!(sender == @{{sender}}, E_NOT_ADMIN);
+        // 1. Admin Check (Optional: Remove if you want anyone to use this)
+        let sender = tx_context::sender(ctx);
+        // Ensure you change ADMIN_ADDRESS above to your real address
+        // 2. Split the coin
+        // We take 'amount' out of the 'payment_coin'
+        let coin_to_send = coin::split(payment_coin, amount, ctx);
 
-        // Move, SUI'yi otomatik olarak gas coin'den oluşturur
-        let coin = coin::split(&coin::value<SUI>(ctx), amount);
-
-        // Gönder
-        coin::transfer(coin, recipient);
+        // 3. Send the split coin to the recipient
+        transfer::public_transfer(coin_to_send, recipient);
     }
 }

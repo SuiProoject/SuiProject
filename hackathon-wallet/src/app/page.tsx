@@ -5,15 +5,24 @@ import { EnokiFlow } from "@mysten/enoki";
 import { getFullnodeUrl, SuiClient } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 
+// --- AYARLAR ---
 const ENOKI_API_KEY = "enoki_public_ce1bb4cc0289b93f071e03a024fd6a7b";
-const CLIENT_ID = "pikhmq1ra3gfr4emzjjt56kzu0pd4v"; // Twitch client ID
+const CLIENT_ID = "pikhmq1ra3gfr4emzjjt56kzu0pd4v"; 
+
+// 🔴 BURAYA KENDİ PACKAGE ID'Nİ YAPIŞTIR (Deploy sonrası terminalde çıkan ID)
+const PACKAGE_ID = "0x3f60ec52273d0ac7c0c98ad1dfe51c4e5d2f62e9713a97d4f1a2c55834c81cc4"; 
+const MODULE_NAME = "payment"; // Move dosyasındaki modül adı
+const FUNCTION_NAME = "send_sui"; // Fonksiyon adı
 
 export default function Home() {
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState<string>("Yükleniyor...");
   const [loading, setLoading] = useState(false);
   const [txDigest, setTxDigest] = useState<string | null>(null);
+  
+  // Yeni State'ler
   const [recipient, setRecipient] = useState<string>("");
+  const [amount, setAmount] = useState<string>(""); // Kullanıcının gireceği miktar
 
   const enokiFlow = new EnokiFlow({ apiKey: ENOKI_API_KEY });
 
@@ -35,10 +44,11 @@ export default function Home() {
   };
 
   // -------------------------------------------------------------------
-  // 🔥 TEMEL GÖNDERİM FONKSİYONU (recipient parametreli)
+  // 🔥 MOVE KONTRAKTI ÇAĞIRAN FONKSİYON
   // -------------------------------------------------------------------
-  const sendTo = async (to: string) => {
+  const sendSuiViaContract = async () => {
     if (!address) return alert("Bağlı hesap yok!");
+    if (!amount || isNaN(Number(amount))) return alert("Geçerli bir miktar girin!");
 
     setLoading(true);
     setTxDigest(null);
@@ -48,11 +58,23 @@ export default function Home() {
       const keypair = await enokiFlow.getKeypair({ network: "testnet" });
 
       const tx = new Transaction();
-      const amount = 10_000_000; // 0.01 SUI
 
-      const [coin] = tx.splitCoins(tx.gas, [amount]);
-      tx.transferObjects([coin], to); // 🔥 İŞLEMİN KALBİ
+      // 1. MIST Dönüşümü: Kullanıcı "1" girerse bu 1 SUI'dir (1 milyar MIST)
+      // Ondalık sayıları (0.5 gibi) desteklemek için matematik işlemi yapıyoruz.
+      const amountInMist = BigInt(Math.floor(Number(amount) * 1_000_000_000));
 
+      // 2. Move Call (Kontrat Çağrısı)
+      // Fonksiyon imzan: send_sui(payment_coin: &mut Coin<SUI>, recipient: address, amount: u64)
+      tx.moveCall({
+        target: `${PACKAGE_ID}::${MODULE_NAME}::${FUNCTION_NAME}`,
+        arguments: [
+          tx.gas,                 // Senin cüzdanındaki Gas coini (payment_coin olarak geçer)
+          tx.pure.address(recipient), // Alıcı adresi
+          tx.pure.u64(amountInMist),  // Gönderilecek miktar
+        ],
+      });
+
+      // 3. İmzala ve Gönder
       const result = await client.signAndExecuteTransaction({
         signer: keypair,
         transaction: tx,
@@ -60,18 +82,16 @@ export default function Home() {
       });
 
       setTxDigest(result.digest);
-      alert("İşlem tamam!");
+      alert("✅ Kontrat üzerinden transfer başarılı!");
     } catch (err) {
       console.error("Gönderim hatası:", err);
-      alert("Gönderim başarısız!");
+      alert("❌ İşlem başarısız! Console'u kontrol et.");
     }
 
     setLoading(false);
   };
 
-  // -------------------------------------------------------------------
-  // 🔥 SAYFA YÜKLENİNCE — LOGIN + BAKİYE GETİRME
-  // -------------------------------------------------------------------
+  // --- SAYFA YÜKLENİNCE ---
   useEffect(() => {
     (async () => {
       try {
@@ -101,7 +121,7 @@ export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4 font-sans">
       <h1 className="text-4xl font-bold mb-10 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
-        Sui zkLogin + Transfer Demo
+        Sui Move Contract Demo
       </h1>
 
       {/* --- GİRİŞ YOKSA --- */}
@@ -137,25 +157,41 @@ export default function Home() {
           <p className="text-gray-400 text-sm mb-1">Bakiye</p>
           <p className="text-4xl font-bold mb-8">{balance}</p>
 
-          {/* --- BAŞKASINA GÖNDERME INPUTU --- */}
-          <input
-            type="text"
-            placeholder="Alıcı adresi..."
-            value={recipient}
-            onChange={(e) => setRecipient(e.target.value)}
-            className="w-full mb-4 p-3 bg-gray-700 rounded-lg text-sm"
-          />
+          {/* --- INPUT ALANLARI --- */}
+          <div className="space-y-4 mb-6">
+            <div>
+              <label className="text-xs text-gray-400 ml-1">Alıcı Adresi</label>
+              <input
+                type="text"
+                placeholder="0x..."
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+                className="w-full p-3 bg-gray-700 rounded-lg text-sm border border-gray-600 focus:border-blue-500 outline-none"
+              />
+            </div>
+            
+            <div>
+              <label className="text-xs text-gray-400 ml-1">Miktar (SUI)</label>
+              <input
+                type="number"
+                placeholder="Örn: 0.5"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full p-3 bg-gray-700 rounded-lg text-sm border border-gray-600 focus:border-blue-500 outline-none"
+              />
+            </div>
+          </div>
 
           <button
-            disabled={loading || recipient.length < 10}
-            onClick={() => sendTo(recipient)}
+            disabled={loading || recipient.length < 10 || !amount}
+            onClick={sendSuiViaContract}
             className={`w-full py-4 rounded-xl font-bold text-lg transition ${
               loading
                 ? "bg-gray-700 cursor-not-allowed"
-                : "bg-green-600 hover:bg-green-700"
+                : "bg-blue-600 hover:bg-blue-700"
             }`}
           >
-            {loading ? "Gönderiliyor..." : "📤 Başkasına 0.01 SUI Gönder"}
+            {loading ? "İşleniyor..." : "🚀 Kontrat ile Gönder"}
           </button>
 
           {txDigest && (
