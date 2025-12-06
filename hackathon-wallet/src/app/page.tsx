@@ -1,103 +1,44 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { EnokiFlow } from "@mysten/enoki";
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
-import clsx from "clsx";
-import { QRCodeSVG } from "qrcode.react";
+import QRCode from "react-qr-code";
 
-// --- TİP TANIMLAMALARI ---
-
-type Product = {
-  id: string;
-  name: string;
-  price: number;
-  desc: string;
-};
-
-type CartItem = { 
-  id: string; 
-  qty: number 
-};
-
-interface QrCodePaymentProps {
-  totalMist: bigint;
-  shopAddress: string;
-}
-
-// -------------------------
-
-/** ===== CONFIG - burayı kendi değerlerinle güncelle ===== */
+// CONFIG
 const ENOKI_API_KEY = "enoki_public_ce1bb4cc0289b93f071e03a024fd6a7b";
 const CLIENT_ID = "pikhmq1ra3gfr4emzjjt56kzu0pd4v";
 const PACKAGE_ID = "0x3f60ec52273d0ac7c0c98ad1dfe51c4e5d2f62e9713a97d4f1a2c55834c81cc4";
 const MODULE_NAME = "payment";
 const FUNCTION_NAME = "send_sui";
 const SHOP_ADDRESS = "0x524b788d82f765ec0abdd0976d25af2bff2e8e7031e9bb5bef26ef06f3c0cf3f";
-/** ====================================================== */
 
-/** Product catalog (SUI prices in decimal) */
-const PRODUCTS: Product[] = [
-  { id: "americano", name: "Americano", price: 0.05, desc: "Sıcak, sade ve güçlü." },
-  { id: "latte", name: "Latte", price: 0.08, desc: "Sütlü, yumuşak." },
-  { id: "ice-americano", name: "Ice Americano", price: 0.06, desc: "Soğuk, ferahlatıcı." },
-  { id: "ice-latte", name: "Ice Latte", price: 0.09, desc: "Buzlu ve kremsi." },
-  { id: "chai-latte", name: "Chai Latte", price: 0.085, desc: "Baharatlı sütlü çay." },
-  { id: "flat-white", name: "Flat White", price: 0.075, desc: "Yoğun espresso + ince süt." },
+const PRODUCTS = [
+  { id: "americano", name: "Americano", price: 0.05, desc: "Sıcak espresso" },
+  { id: "latte", name: "Latte", price: 0.08, desc: "Sütlü kahve" },
+  { id: "ice-americano", name: "Ice Americano", price: 0.06, desc: "Buzlu espresso" },
+  { id: "ice-latte", name: "Ice Latte", price: 0.09, desc: "Buzlu sütlü" },
+  { id: "chai-latte", name: "Chai Latte", price: 0.085, desc: "Baharatlı çay" },
+  { id: "flat-white", name: "Flat White", price: 0.075, desc: "Yoğun kahve" },
 ];
-
-
-// --- QR KOD BİLEŞENİ ---
-const QrCodePayment: React.FC<QrCodePaymentProps> = ({ totalMist, shopAddress }) => {
-    const paymentUrl = useMemo(() => {
-        const encodedMist = totalMist.toString();
-        return `sui:transfer?recipient=${shopAddress}&amount=${encodedMist}`;
-    }, [totalMist, shopAddress]);
-
-    if (totalMist <= BigInt(0)) return null;
-
-    return (
-        <div className="mt-4 p-4 border border-cyan-700 rounded-lg bg-gray-900 text-center animate-pulse-slow">
-            <h4 className="text-sm font-bold text-pink-500 mb-3">SCAN & PAY</h4>
-            
-            <div className="flex justify-center bg-white p-2 rounded-lg inline-block">
-                <QRCodeSVG 
-                    value={paymentUrl} 
-                    size={150} 
-                    level="H"
-                    includeMargin={true}
-                />
-            </div>
-
-            <p className="text-xs text-gray-500 mt-3">
-                Cüzdanınızla bu kodu tarayın. Tutar: {(Number(totalMist) / 1e9).toFixed(3)} SUI
-            </p>
-            <p className="text-xs text-gray-600 break-all mt-1">
-                 {shopAddress.slice(0, 10)}...{shopAddress.slice(-8)}
-            </p>
-        </div>
-    );
-};
-// --- QR KOD BİLEŞENİ SONU ---
-
 
 export default function Page() {
   const [userAddress, setUserAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [cart, setCart] = useState<Array<{id: string; qty: number}>>([]);
+  const [loading, setLoading] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [purchaseCount, setPurchaseCount] = useState<number>(0);
-  const [showNftCongrats, setShowNftCongrats] = useState(false);
-  
-  // YENİ STATE: Cüzdan görünürlüğü (Default: false/gizli)
-  const [isWalletVisible, setIsWalletVisible] = useState(false);
+  const [showNft, setShowNft] = useState<boolean>(false);
+  const [walletVisible, setWalletVisible] = useState<boolean>(false);
+  const [showQrModal, setShowQrModal] = useState<boolean>(false);
+  const [qrCopied, setQrCopied] = useState<boolean>(false);
 
   const enoki = new EnokiFlow({ apiKey: ENOKI_API_KEY });
   const client = new SuiClient({ url: getFullnodeUrl("testnet") });
 
-  const purchasesKey = (addr: string | null) => `sui_coffee_purchases_${addr ?? "anon"}`;
+  const storageKey = (addr: string | null) => `sui_coffee_${addr ?? "anon"}`;
 
   useEffect(() => {
     (async () => {
@@ -109,50 +50,44 @@ export default function Page() {
 
         const signer = await enoki.getKeypair({ network: "testnet" });
         if (!signer) return;
+        
         const addr = signer.toSuiAddress();
         setUserAddress(addr);
 
-        const stored = localStorage.getItem(purchasesKey(addr));
+        const stored = localStorage.getItem(storageKey(addr));
         setPurchaseCount(stored ? Number(stored) : 0);
 
         try {
           const coins = await client.getCoins({ owner: addr });
           const total = coins.data.reduce((acc, c) => acc + Number(c.balance), 0);
           setBalance((total / 1e9).toFixed(3) + " SUI");
-        } catch (e) {
-          setBalance(null);
-        }
-      } catch {
-        // not logged in / ignore
-      }
+        } catch {}
+      } catch {}
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cart helpers
-  const addToCart = (prodId: string) => {
+  const addToCart = (id: string) => {
     setCart((prev) => {
-      const found = prev.find((p) => p.id === prodId);
-      if (found) return prev.map((p) => (p.id === prodId ? { ...p, qty: p.qty + 1 } : p));
-      return [...prev, { id: prodId, qty: 1 }];
+      const found = prev.find((p) => p.id === id);
+      if (found) return prev.map((p) => (p.id === id ? { ...p, qty: p.qty + 1 } : p));
+      return [...prev, { id, qty: 1 }];
     });
   };
 
-  const removeFromCart = (prodId: string) => setCart((prev) => prev.filter((p) => p.id !== prodId));
-
-  const changeQty = (prodId: string, qty: number) => {
-    if (qty <= 0) { removeFromCart(prodId); return; }
-    setCart((prev) => prev.map((p) => (p.id === prodId ? { ...p, qty } : p)));
+  const changeQty = (id: string, qty: number) => {
+    if (qty <= 0) {
+      setCart((prev) => prev.filter((p) => p.id !== id));
+      return;
+    }
+    setCart((prev) => prev.map((p) => (p.id === id ? { ...p, qty } : p)));
   };
 
-  const cartTotalSui = () =>
+  const cartTotal = () =>
     cart.reduce((sum, item) => {
       const prod = PRODUCTS.find((p) => p.id === item.id);
-      if (!prod) return sum;
-      return sum + prod.price * item.qty;
+      return sum + (prod ? prod.price * item.qty : 0);
     }, 0);
 
-  // Login/Logout
   const handleLogin = async () => {
     const redirectUrl = window.location.origin;
     const authUrl = await enoki.createAuthorizationURL({
@@ -164,291 +99,337 @@ export default function Page() {
     window.location.href = authUrl;
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     try { enoki.logout(); } catch {}
-    if (userAddress) localStorage.removeItem(purchasesKey(userAddress));
+    if (userAddress) localStorage.removeItem(storageKey(userAddress));
     setUserAddress(null);
     setBalance(null);
     setCart([]);
     setPurchaseCount(0);
-    setIsWalletVisible(false); // Çıkış yapınca görünümü sıfırla
+    setWalletVisible(false);
   };
 
-  // Enoki/UniPass ile ödeme akışı
-  const checkoutEnoki = async () => {
-    if (!userAddress) { setStatusMsg("Önce UniPass ile bağlanın."); return; }
-    if (cart.length === 0) { setStatusMsg("Sepet boş."); return; }
+  const checkout = async () => {
+    if (!userAddress) {
+      setStatusMsg("Önce giriş yapın");
+      return;
+    }
+    if (cart.length === 0) {
+      setStatusMsg("Sepet boş");
+      return;
+    }
 
     setLoading(true);
     setStatusMsg(null);
 
     try {
       const signer = await enoki.getKeypair({ network: "testnet" });
-      if (!signer) throw new Error("Cüzdan alınamadı.");
+      if (!signer) throw new Error("Cüzdan alınamadı");
 
-      const totalSui = cartTotalSui();
+      const totalSui = cartTotal();
       const totalMist = BigInt(Math.floor(totalSui * 1_000_000_000));
 
-      if (totalMist <= BigInt(0)) throw new Error("Toplam 0 olamaz.");
-
       const tx = new Transaction();
-
-      // moveCall ile ödeme
       tx.moveCall({
         target: `${PACKAGE_ID}::${MODULE_NAME}::${FUNCTION_NAME}`,
-        arguments: [
-          tx.gas, 
-          tx.pure.address(SHOP_ADDRESS),
-          tx.pure.u64(totalMist),
-        ],
+        arguments: [tx.gas, tx.pure.address(SHOP_ADDRESS), tx.pure.u64(totalMist)],
       });
 
-      const result = await client.signAndExecuteTransaction({
+      await client.signAndExecuteTransaction({
         signer,
         transaction: tx,
         options: { showEffects: true },
       });
 
-      // success logic
-      setStatusMsg("Ödeme başarılı! Teşekkürler ☕️");
+      setStatusMsg("✅ Ödeme başarılı!");
       const bought = cart.reduce((s, it) => s + it.qty, 0);
       setCart([]);
 
-      const prev = Number(localStorage.getItem(purchasesKey(userAddress)) ?? 0);
+      const prev = Number(localStorage.getItem(storageKey(userAddress)) ?? 0);
       const now = prev + bought;
-      if (userAddress) localStorage.setItem(purchasesKey(userAddress), String(now));
+      localStorage.setItem(storageKey(userAddress), String(now));
       setPurchaseCount(now);
 
-      if (now >= 15) setShowNftCongrats(true);
-
-      if ((result as any)?.digest) {
-        setStatusMsg((prevMsg) => `${prevMsg} (tx: ${(result as any).digest})`);
-      }
+      if (now >= 15) setShowNft(true);
     } catch (err: any) {
-      console.error(err);
-      setStatusMsg("Ödeme başarısız: " + (err?.message ?? String(err)));
+      setStatusMsg("❌ Ödeme başarısız: " + (err?.message ?? ""));
     } finally {
       setLoading(false);
     }
   };
 
-  // MIST cinsinden toplam tutar
-  const totalSui = cartTotalSui();
-  const totalMist = BigInt(Math.floor(totalSui * 1_000_000_000));
-  const remainingForNft = Math.max(0, 15 - purchaseCount);
+  const copyQrAddress = () => {
+    navigator.clipboard.writeText(SHOP_ADDRESS);
+    setQrCopied(true);
+    setTimeout(() => setQrCopied(false), 2000);
+  };
 
+  const totalSui = cartTotal();
+  const remaining = Math.max(0, 15 - purchaseCount);
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-6 font-mono text-cyan-400">
-      <div className="w-full max-w-5xl grid lg:grid-cols-3 gap-8">
-        {/* LEFT: Branding + campaign */}
-        <div className="col-span-1 bg-gray-800 rounded-2xl p-6 shadow-xl shadow-cyan-900/50 border border-cyan-700/50">
-          <div className="text-center mb-6">
-            <h1 className="text-3xl font-extrabold text-pink-500 neon-text-pink">Sui Coffee // CYBER Edition</h1>
-            <p className="text-sm text-gray-400">Buy coffee with SUI — pocket friendly & speedy</p>
-          </div>
-
-          {/* Campaign Section */}
-          <div className="mb-5 p-4 rounded-lg bg-gray-900 border border-green-500 neon-glow-green">
-            <h3 className="font-bold text-green-400">SYSTEM // PROMO ACTIVE</h3>
-            <p className="text-sm text-gray-300 mt-2">
-              15 kahve içene <span className="font-semibold text-pink-500">Cart Curt</span> NFT hediye!
-            </p>
-            <p className="text-xs text-gray-400 mt-2">
-              Progress: <span className="font-medium text-cyan-400">{purchaseCount}</span> / 15
-            </p>
-            <div className="w-full bg-gray-700 h-2 rounded mt-3 overflow-hidden">
-              <div
-                className="h-2 bg-pink-500 neon-glow-pink"
-                style={{ width: `${Math.min(100, (purchaseCount / 15) * 100)}%` }}
-              />
-            </div>
-            <p className="text-xs text-gray-400 mt-3">
-              {remainingForNft > 0
-                ? `[STATUS]: ${remainingForNft} units until NFT mint.`
-                : "[STATUS]: CLAIM READY. Awaiting ADMIN mint."}
-            </p>
-          </div>
-
-          <div className="mb-4">
-            <div className="flex justify-between items-center mb-2">
-                <h4 className="text-sm font-semibold text-cyan-400">// WALLET INTERFACE</h4>
-                {/* GİZLE / GÖSTER TOGGLE BUTONU */}
-                {userAddress && (
-                    <button 
-                        onClick={() => setIsWalletVisible(!isWalletVisible)}
-                        className="text-[10px] uppercase border border-cyan-700 px-2 py-0.5 rounded text-cyan-200 hover:bg-cyan-900 hover:text-white transition"
-                    >
-                        {isWalletVisible ? "[HIDE DATA]" : "[REVEAL]"}
-                    </button>
-                )}
-            </div>
-
-            {userAddress ? (
-              <>
-                {/* Cüzdan Adresi - Sansürlü/Açık */}
-                <div 
-                    onClick={() => setIsWalletVisible(!isWalletVisible)}
-                    className={clsx(
-                        "text-xs font-mono break-all bg-gray-900 p-2 rounded border border-cyan-500/50 cursor-pointer transition-all",
-                        !isWalletVisible ? "text-gray-500" : "text-cyan-300"
-                    )}
-                >
-                    {isWalletVisible 
-                        ? userAddress 
-                        : `${userAddress.slice(0, 6)}...******...${userAddress.slice(-4)}`
-                    }
-                </div>
-
-                {/* Bakiye - Blur/Açık */}
-                <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
-                    <span>Balance:</span>
-                    <span className={clsx(
-                        "font-bold transition-all",
-                        isWalletVisible ? "text-white" : "text-gray-600 blur-[3px]"
-                    )}>
-                        {balance ?? "Loading..."}
-                    </span>
-                </div>
-
-                <button
-                  onClick={handleLogout}
-                  className="mt-3 w-full text-xs py-2 rounded bg-red-700/50 text-red-400 border border-red-400 hover:bg-red-700 neon-glow-red"
-                >
-                  [LOGOUT]
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleLogin}
-                className="mt-2 w-full bg-cyan-600 text-black py-3 rounded-lg font-bold border border-cyan-400 hover:bg-cyan-700 neon-glow-cyan"
-              >
-                // CONNECT: UniPass
-              </button>
-            )}
-          </div>
-
-          <div className="text-xs text-gray-500 pt-4 border-t border-gray-700">
-            <p className="mb-1">Protocol: <span className="font-medium">Sui Coffee</span></p>
-            <p className="mb-1">Network Status: <span className="text-green-400">ONLINE</span></p>
-            <p className="mb-1">Admin: {SHOP_ADDRESS.slice(0, 8)}...</p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-500 mb-2">
+            ☕ Sui Coffee Shop
+          </h1>
+          <p className="text-gray-400">Pay with SUI • Fast & Secure</p>
         </div>
 
-        {/* CENTER: Product grid */}
-        <div className="col-span-1 lg:col-span-1 bg-gray-800 rounded-2xl p-6 shadow-xl shadow-cyan-900/50 border border-cyan-700/50 overflow-auto">
-          <h2 className="text-lg font-bold mb-4 text-cyan-400">// MENU SCAN</h2>
-          <div className="grid grid-cols-1 gap-4">
-            {PRODUCTS.map((p) => {
-              const inCart = cart.find((c) => c.id === p.id);
-              return (
-                <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border border-gray-700 hover:border-pink-500 transition duration-150">
-                  <div>
-                    <div className="text-sm font-semibold text-white">{p.name}</div>
-                    <div className="text-xs text-gray-500">{p.desc}</div>
-                    <div className="text-xs text-green-400 font-medium mt-1">{p.price} SUI</div>
-                  </div>
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* LEFT: Wallet & Campaign */}
+          <div className="bg-gray-800/80 backdrop-blur rounded-2xl p-6 border border-gray-700">
+            <h3 className="text-cyan-400 font-bold mb-4">🎯 Kampanya</h3>
+            <div className="bg-gradient-to-r from-pink-500/20 to-purple-500/20 rounded-lg p-4 mb-4 border border-pink-500/30">
+              <p className="text-sm text-gray-200">15 kahve = <span className="font-bold text-pink-400">NFT Hediye!</span></p>
+              <div className="mt-3">
+                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                  <span>İlerleme</span>
+                  <span>{purchaseCount}/15</span>
+                </div>
+                <div className="w-full bg-gray-700 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="h-2 bg-gradient-to-r from-cyan-400 to-pink-500 transition-all"
+                    style={{ width: `${Math.min(100, (purchaseCount / 15) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              {remaining > 0 ? (
+                <p className="text-xs text-gray-400 mt-2">{remaining} kahve daha!</p>
+              ) : (
+                <p className="text-xs text-green-400 mt-2">✅ NFT kazandınız!</p>
+              )}
+            </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center border border-cyan-700 rounded">
-                      <button
-                        onClick={() => changeQty(p.id, Math.max(0, (inCart?.qty ?? 0) - 1))}
-                        className="px-3 py-1 text-sm text-red-400"
-                      >
-                        −
-                      </button>
-                      <div className="px-4 text-sm text-white">{inCart?.qty ?? 0}</div>
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-cyan-400 font-bold text-sm">💼 Cüzdan</h4>
+                {userAddress && (
+                  <button
+                    onClick={() => setWalletVisible(!walletVisible)}
+                    className="text-xs px-2 py-1 bg-gray-700 rounded text-gray-300 hover:bg-gray-600"
+                  >
+                    {walletVisible ? "Gizle" : "Göster"}
+                  </button>
+                )}
+              </div>
+
+              {userAddress ? (
+                <>
+                  <div
+                    onClick={() => setWalletVisible(!walletVisible)}
+                    className="text-xs bg-gray-900 p-3 rounded cursor-pointer font-mono"
+                  >
+                    {walletVisible ? (
+                      <span className="text-cyan-300">{userAddress}</span>
+                    ) : (
+                      <span className="text-gray-500">
+                        {userAddress.slice(0, 6)}...****...{userAddress.slice(-4)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex justify-between items-center mt-2 text-xs">
+                    <span className="text-gray-400">Bakiye:</span>
+                    <span className={walletVisible ? "text-white font-bold" : "text-gray-600 blur-sm"}>
+                      {balance ?? "..."}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full mt-3 py-2 bg-red-600/50 text-red-200 rounded hover:bg-red-600 text-sm"
+                  >
+                    Çıkış Yap
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleLogin}
+                  className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-bold hover:from-cyan-600 hover:to-blue-600"
+                >
+                  🔐 UniPass ile Giriş
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* CENTER: Products */}
+          <div className="bg-gray-800/80 backdrop-blur rounded-2xl p-6 border border-gray-700">
+            <h3 className="text-cyan-400 font-bold mb-4">📋 Menü</h3>
+            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              {PRODUCTS.map((p) => {
+                const inCart = cart.find((c) => c.id === p.id);
+                return (
+                  <div key={p.id} className="bg-gray-900/50 p-3 rounded-lg border border-gray-700 hover:border-cyan-500 transition">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-bold text-white">{p.name}</h4>
+                        <p className="text-xs text-gray-400">{p.desc}</p>
+                      </div>
+                      <span className="text-green-400 font-bold">{p.price} SUI</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2 bg-gray-800 rounded px-2">
+                        <button
+                          onClick={() => changeQty(p.id, (inCart?.qty ?? 0) - 1)}
+                          className="text-red-400 px-2 py-1"
+                        >
+                          −
+                        </button>
+                        <span className="text-white w-8 text-center">{inCart?.qty ?? 0}</span>
+                        <button
+                          onClick={() => addToCart(p.id)}
+                          className="text-green-400 px-2 py-1"
+                        >
+                          +
+                        </button>
+                      </div>
                       <button
                         onClick={() => addToCart(p.id)}
-                        className="px-3 py-1 text-sm border-l border-cyan-700 bg-gray-900 text-green-400 hover:text-green-500"
+                        className="px-4 py-1 bg-pink-600 text-white rounded hover:bg-pink-700 text-sm"
                       >
-                        +
+                        Ekle
                       </button>
-                    </div>
-                    <button
-                      onClick={() => addToCart(p.id)}
-                      className="ml-2 text-xs bg-pink-600 text-white px-3 py-2 rounded border border-pink-500 hover:bg-pink-700 neon-glow-pink"
-                    >
-                      ADD TO CART
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* RIGHT: Cart + Checkout */}
-        <div className="col-span-1 bg-gray-800 rounded-2xl p-6 shadow-xl shadow-cyan-900/50 border border-cyan-700/50">
-          <h3 className="text-lg font-bold mb-4 text-cyan-400">// CART INTERFACE</h3>
-
-          {cart.length === 0 ? (
-            <div className="text-sm text-gray-500">Cart is empty. Please select item(s) to proceed.</div>
-          ) : (
-            <div className="space-y-3 mb-4">
-              {cart.map((it) => {
-                const prod = PRODUCTS.find((p) => p.id === it.id);
-                if (!prod) return null;
-                return (
-                  <div key={it.id} className="flex items-center justify-between border-b border-gray-700 pb-2">
-                    <div>
-                      <div className="text-sm font-medium text-white">{prod.name} × {it.qty}</div>
-                      <div className="text-xs text-gray-500">Price: <span className="text-green-400">{(prod.price * it.qty).toFixed(3)} SUI</span></div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => changeQty(it.id, it.qty - 1)} className="text-xs px-2 py-1 border border-red-400 rounded text-red-400 hover:bg-red-900 transition">−</button>
-                      <button onClick={() => changeQty(it.id, it.qty + 1)} className="text-xs px-2 py-1 border border-green-400 rounded text-green-400 hover:bg-green-900 transition">+</button>
                     </div>
                   </div>
                 );
               })}
             </div>
-          )}
+          </div>
 
-          <div className="mt-4 border-t border-cyan-700 pt-4">
-            <div className="flex justify-between items-center mb-3">
-              <div className="text-sm text-gray-500">// TOTAL COST</div>
-              <div className="font-bold text-2xl text-pink-500 neon-text-pink">{totalSui.toFixed(3)} SUI</div>
-            </div>
+          {/* RIGHT: Cart & Checkout */}
+          <div className="bg-gray-800/80 backdrop-blur rounded-2xl p-6 border border-gray-700">
+            <h3 className="text-cyan-400 font-bold mb-4">🛒 Sepet</h3>
 
-            {/* UniPass/Enoki ile Ödeme Butonu */}
-            {userAddress && (
-                <button
-                onClick={checkoutEnoki}
-                disabled={loading || cart.length === 0}
-                className={clsx(
-                    "w-full py-3 rounded-lg text-black font-bold transition neon-glow-cyan mb-3",
-                    loading ? "bg-gray-600 cursor-not-allowed text-gray-400" : "bg-cyan-400 hover:bg-cyan-500 border border-cyan-300"
+            {cart.length === 0 ? (
+              <p className="text-gray-400 text-center py-8">Sepet boş</p>
+            ) : (
+              <div className="space-y-2 mb-4">
+                {cart.map((it) => {
+                  const prod = PRODUCTS.find((p) => p.id === it.id);
+                  if (!prod) return null;
+                  return (
+                    <div key={it.id} className="flex justify-between items-center bg-gray-900/50 p-2 rounded">
+                      <div>
+                        <p className="text-white text-sm">{prod.name} × {it.qty}</p>
+                        <p className="text-xs text-green-400">{(prod.price * it.qty).toFixed(3)} SUI</p>
+                      </div>
+                      <button
+                        onClick={() => changeQty(it.id, 0)}
+                        className="text-red-400 hover:text-red-300 text-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="border-t border-gray-700 pt-4 mt-4">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-gray-400">Toplam</span>
+                <span className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-pink-500">
+                  {totalSui.toFixed(3)} SUI
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                {userAddress && cart.length > 0 && (
+                  <button
+                    onClick={checkout}
+                    disabled={loading}
+                    className="col-span-2 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-bold hover:from-cyan-600 hover:to-blue-600 disabled:opacity-50"
+                  >
+                    {loading ? "İşleniyor..." : "💳 Ödeme Yap"}
+                  </button>
                 )}
-                >
-                {loading ? "[PROCESSING... STAND BY]" : "PAY WITH SUI (UniPass/Enoki)"}
-                </button>
-            )}
-            
-            {/* QR KOD ALANI - OTOMATİK GÖSTERİM (Gerçek QR) */}
-            {cart.length > 0 && (
-                 <QrCodePayment totalMist={totalMist} shopAddress={SHOP_ADDRESS} />
-            )}
+                
+                {cart.length > 0 && (
+                  <button
+                    onClick={() => setShowQrModal(true)}
+                    className="col-span-2 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-bold border border-gray-600"
+                  >
+                    📱 QR ile Öde
+                  </button>
+                )}
+              </div>
 
-            {statusMsg && <p className="text-xs mt-3 text-center text-gray-400">{statusMsg}</p>}
+              {statusMsg && (
+                <p className="text-sm text-center mt-3 text-gray-300">{statusMsg}</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* NFT Modal */}
-      {showNftCongrats && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-          <div className="bg-gray-800 rounded-2xl p-6 max-w-md w-full text-center shadow-2xl shadow-pink-900/70 border border-pink-500">
-            <h2 className="text-xl font-bold mb-2 text-pink-500 neon-text-pink">TRANSACTION COMPLETE. 🎉</h2>
-            <p className="text-sm text-gray-300 mb-4">
-              15 units purchased. <span className="font-semibold text-green-400">Cart Curt</span> NFT access granted.
-            </p>
-            <p className="text-xs text-gray-500 mb-4">(Admin will manually mint the NFT to your address.)</p>
+      {/* QR MODAL */}
+      {showQrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-white text-gray-900 rounded-2xl p-8 max-w-sm w-full relative shadow-2xl">
             <button
-              onClick={() => setShowNftCongrats(false)}
-              className="mt-2 bg-green-600 text-black py-2 px-6 rounded-lg font-bold border border-green-400 hover:bg-green-700 neon-glow-green"
+              onClick={() => setShowQrModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-800 font-bold text-xl"
             >
-              [CLOSE WINDOW]
+              ✕
+            </button>
+
+            <h2 className="text-2xl font-bold text-center mb-2">QR ile Öde</h2>
+            <p className="text-gray-500 text-center text-sm mb-6">
+              Suiet veya Surf Wallet ile QR'u tarayın
+            </p>
+
+            <div className="flex justify-center mb-6 bg-white p-4 rounded-xl border-2 border-gray-100">
+              <QRCode
+                value={SHOP_ADDRESS}
+                size={200}
+                level="H"
+              />
+            </div>
+
+            <div className="bg-gradient-to-r from-pink-500/10 to-purple-500/10 p-4 rounded-lg mb-4 border border-pink-500/30">
+              <p className="text-center text-lg font-bold text-gray-900">
+                {totalSui.toFixed(3)} SUI
+              </p>
+              <p className="text-center text-xs text-gray-500 mt-1">Ödenecek Tutar</p>
+            </div>
+
+            <div className="bg-gray-100 p-3 rounded-lg flex items-center justify-between mb-4">
+              <p className="text-xs font-mono text-gray-600 truncate w-48">{SHOP_ADDRESS}</p>
+              <button
+                onClick={copyQrAddress}
+                className="text-blue-600 font-bold text-xs uppercase hover:text-blue-800"
+              >
+                {qrCopied ? "✓" : "Kopyala"}
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowQrModal(false)}
+              className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition"
+            >
+              Kapat
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* NFT Modal */}
+      {showNft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-gradient-to-br from-gray-800 to-purple-900 rounded-2xl p-8 max-w-md border-2 border-pink-500 shadow-2xl">
+            <h2 className="text-2xl font-bold text-pink-400 mb-3 text-center">🎉 TEBRİKLER!</h2>
+            <p className="text-gray-200 text-center mb-4">
+              15 kahve aldınız! <span className="font-bold text-green-400">Cart Curt NFT</span> kazandınız.
+            </p>
+            <p className="text-xs text-gray-400 text-center mb-6">
+              NFT adresinize gönderilecek.
+            </p>
+            <button
+              onClick={() => setShowNft(false)}
+              className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-bold hover:from-green-600 hover:to-emerald-600"
+            >
+              Tamam
             </button>
           </div>
         </div>
