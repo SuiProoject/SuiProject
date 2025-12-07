@@ -412,7 +412,7 @@ export default function Page() {
 
             <div className="flex justify-center mb-6 bg-white p-4 rounded-xl border-2 border-gray-100">
               <QRCode
-                value={`${SHOP_ADDRESS}:${Math.floor(totalSui * 1_000_000_000)}`}
+                value={SHOP_ADDRESS}
                 size={200}
                 level="M"
               />
@@ -436,12 +436,6 @@ export default function Page() {
                   {qrCopied ? "✓" : "Kopyala"}
                 </button>
               </div>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <p className="text-xs text-blue-800 text-center">
-                💡 QR kod alıcı adresi ve tutarı içerir. Cüzdanınız desteklemiyorsa tutarı manuel girin.
-              </p>
             </div>
 
             <button
