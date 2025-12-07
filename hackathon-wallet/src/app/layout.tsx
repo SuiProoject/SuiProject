@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "UniPayApp",
-  description: "UniPayApp",
+  title: "UniPass",
+  description: "UniPass",
 };
 
 export default function RootLayout({
