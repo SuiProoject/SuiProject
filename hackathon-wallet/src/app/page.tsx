@@ -14,8 +14,8 @@ const MODULE_NAME = "payment";
 const FUNCTION_NAME = "send_sui";
 const SHOP_ADDRESS = "0x524b788d82f765ec0abdd0976d25af2bff2e8e7031e9bb5bef26ef06f3c0cf3f";
 
- const enoki = new EnokiFlow({ apiKey: ENOKI_API_KEY });
-  const client = new SuiClient({ url: getFullnodeUrl("testnet") });
+const enoki = new EnokiFlow({ apiKey: ENOKI_API_KEY });
+const client = new SuiClient({ url: getFullnodeUrl("testnet") });
 
 const PRODUCTS = [
   { id: "americano", name: "Americano", price: 0.05, desc: "Sıcak espresso" },
@@ -40,15 +40,14 @@ export default function Page() {
 
   const storageKey = (addr: string | null) => `sui_coffee_${addr ?? "anon"}`;
 
-useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
-        // Callback işleme
+        // Twitch callback'i işle
         if (window.location.hash.includes("id_token")) {
           try { 
             await enoki.handleAuthCallback(); 
             window.history.replaceState(null, "", window.location.pathname);
-            // Callback işlendikten sonra sayfayı yenile
             window.location.reload();
             return;
           } catch (err) {
@@ -56,15 +55,18 @@ useEffect(() => {
           }
         }
 
+        // Cüzdan bilgisini al
         const signer = await enoki.getKeypair({ network: "testnet" });
         if (!signer) return;
         
         const addr = signer.toSuiAddress();
         setUserAddress(addr);
 
+        // Satın alma sayısını localStorage'dan yükle
         const stored = localStorage.getItem(storageKey(addr));
         setPurchaseCount(stored ? Number(stored) : 0);
 
+        // Bakiye sorgula
         try {
           const coins = await client.getCoins({ owner: addr });
           const total = coins.data.reduce((acc, c) => acc + Number(c.balance), 0);
@@ -255,7 +257,7 @@ useEffect(() => {
                   onClick={handleLogin}
                   className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-lg font-bold hover:from-cyan-600 hover:to-blue-600"
                 >
-                  🔐 UniPass ile Giriş
+                  🔐 Twitch ile Giriş
                 </button>
               )}
             </div>
@@ -371,7 +373,7 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* QR MODAL */}
+      {/* QR MODAL - Slush Wallet Compatible */}
       {showQrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="bg-white text-gray-900 rounded-2xl p-8 max-w-sm w-full relative shadow-2xl">
@@ -384,14 +386,14 @@ useEffect(() => {
 
             <h2 className="text-2xl font-bold text-center mb-2">QR ile Öde</h2>
             <p className="text-gray-500 text-center text-sm mb-6">
-              Suiet veya Surf Wallet ile QR'u tarayın
+              Slush, Suiet veya Surf Wallet ile QR'u tarayın
             </p>
 
             <div className="flex justify-center mb-6 bg-white p-4 rounded-xl border-2 border-gray-100">
               <QRCode
-                value={`sui:${SHOP_ADDRESS}?amount=${Math.floor(totalSui * 1_000_000_000)}`}
+                value={SHOP_ADDRESS}
                 size={200}
-                level="H"
+                level="M"
               />
             </div>
 
@@ -402,14 +404,23 @@ useEffect(() => {
               <p className="text-center text-xs text-gray-500 mt-1">Ödenecek Tutar</p>
             </div>
 
-            <div className="bg-gray-100 p-3 rounded-lg flex items-center justify-between mb-4">
-              <p className="text-xs font-mono text-gray-600 truncate w-48">{SHOP_ADDRESS}</p>
-              <button
-                onClick={copyQrAddress}
-                className="text-blue-600 font-bold text-xs uppercase hover:text-blue-800"
-              >
-                {qrCopied ? "✓" : "Kopyala"}
-              </button>
+            <div className="bg-gray-100 p-3 rounded-lg mb-4">
+              <p className="text-xs text-gray-500 mb-1 text-center">Alıcı Adres</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-mono text-gray-700 truncate flex-1">{SHOP_ADDRESS}</p>
+                <button
+                  onClick={copyQrAddress}
+                  className="ml-2 text-blue-600 font-bold text-xs uppercase hover:text-blue-800"
+                >
+                  {qrCopied ? "✓" : "Kopyala"}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p className="text-xs text-blue-800 text-center">
+                💡 QR'u taradıktan sonra tutarı manuel girin: <span className="font-bold">{totalSui.toFixed(3)} SUI</span>
+              </p>
             </div>
 
             <button
@@ -443,5 +454,5 @@ useEffect(() => {
         </div>
       )}
     </div>
-  );
-}
+
+  )};
