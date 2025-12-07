@@ -227,16 +227,30 @@ export default function Page() {
 
               {userAddress ? (
                 <>
-                  <div
-                    onClick={() => setWalletVisible(!walletVisible)}
-                    className="text-xs bg-gray-900 p-3 rounded cursor-pointer font-mono"
-                  >
-                    {walletVisible ? (
-                      <span className="text-cyan-300">{userAddress}</span>
-                    ) : (
-                      <span className="text-gray-500">
-                        {userAddress.slice(0, 6)}...****...{userAddress.slice(-4)}
-                      </span>
+                  <div className="bg-gray-900 p-3 rounded">
+                    <div 
+                      onClick={() => setWalletVisible(!walletVisible)}
+                      className="text-xs font-mono cursor-pointer break-all mb-2"
+                    >
+                      {walletVisible ? (
+                        <span className="text-cyan-300">{userAddress}</span>
+                      ) : (
+                        <span className="text-gray-500">
+                          {userAddress.slice(0, 8)}...{userAddress.slice(-8)}
+                        </span>
+                      )}
+                    </div>
+                    {walletVisible && (
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(userAddress);
+                          setStatusMsg("Adres kopyalandı!");
+                          setTimeout(() => setStatusMsg(null), 2000);
+                        }}
+                        className="text-xs text-blue-400 hover:text-blue-300 underline"
+                      >
+                        📋 Kopyala
+                      </button>
                     )}
                   </div>
                   <div className="flex justify-between items-center mt-2 text-xs">
@@ -417,12 +431,6 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-              <p className="text-xs text-blue-800 text-center">
-                💡 QR'u taradıktan sonra tutarı manuel girin: <span className="font-bold">{totalSui.toFixed(3)} SUI</span>
-              </p>
-            </div>
-
             <button
               onClick={() => setShowQrModal(false)}
               className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition"
@@ -454,5 +462,5 @@ export default function Page() {
         </div>
       )}
     </div>
-
-  )};
+  );
+}
