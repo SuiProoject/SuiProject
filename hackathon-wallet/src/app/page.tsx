@@ -389,7 +389,7 @@ useEffect(() => {
 
             <div className="flex justify-center mb-6 bg-white p-4 rounded-xl border-2 border-gray-100">
               <QRCode
-                value={SHOP_ADDRESS}
+                value={`sui:${SHOP_ADDRESS}?amount=${Math.floor(totalSui * 1_000_000_000)}`}
                 size={200}
                 level="H"
               />
