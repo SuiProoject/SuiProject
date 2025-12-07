@@ -14,6 +14,9 @@ const MODULE_NAME = "payment";
 const FUNCTION_NAME = "send_sui";
 const SHOP_ADDRESS = "0x524b788d82f765ec0abdd0976d25af2bff2e8e7031e9bb5bef26ef06f3c0cf3f";
 
+ const enoki = new EnokiFlow({ apiKey: ENOKI_API_KEY });
+  const client = new SuiClient({ url: getFullnodeUrl("testnet") });
+  
 const PRODUCTS = [
   { id: "americano", name: "Americano", price: 0.05, desc: "Sıcak espresso" },
   { id: "latte", name: "Latte", price: 0.08, desc: "Sütlü kahve" },
@@ -34,9 +37,6 @@ export default function Page() {
   const [walletVisible, setWalletVisible] = useState<boolean>(false);
   const [showQrModal, setShowQrModal] = useState<boolean>(false);
   const [qrCopied, setQrCopied] = useState<boolean>(false);
-
-  const enoki = new EnokiFlow({ apiKey: ENOKI_API_KEY });
-  const client = new SuiClient({ url: getFullnodeUrl("testnet") });
 
   const storageKey = (addr: string | null) => `sui_coffee_${addr ?? "anon"}`;
 
