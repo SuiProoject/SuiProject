@@ -16,7 +16,7 @@ const SHOP_ADDRESS = "0x524b788d82f765ec0abdd0976d25af2bff2e8e7031e9bb5bef26ef06
 
  const enoki = new EnokiFlow({ apiKey: ENOKI_API_KEY });
   const client = new SuiClient({ url: getFullnodeUrl("testnet") });
-  
+
 const PRODUCTS = [
   { id: "americano", name: "Americano", price: 0.05, desc: "Sıcak espresso" },
   { id: "latte", name: "Latte", price: 0.08, desc: "Sütlü kahve" },
@@ -40,12 +40,20 @@ export default function Page() {
 
   const storageKey = (addr: string | null) => `sui_coffee_${addr ?? "anon"}`;
 
-  useEffect(() => {
+useEffect(() => {
     (async () => {
       try {
+        // Callback işleme
         if (window.location.hash.includes("id_token")) {
-          try { await enoki.handleAuthCallback(); } catch {}
-          window.history.replaceState(null, "", window.location.pathname);
+          try { 
+            await enoki.handleAuthCallback(); 
+            window.history.replaceState(null, "", window.location.pathname);
+            // Callback işlendikten sonra sayfayı yenile
+            window.location.reload();
+            return;
+          } catch (err) {
+            console.error("Auth callback error:", err);
+          }
         }
 
         const signer = await enoki.getKeypair({ network: "testnet" });
@@ -89,7 +97,7 @@ export default function Page() {
     }, 0);
 
   const handleLogin = async () => {
-    const redirectUrl = window.location.origin;
+    const redirectUrl = window.location.origin + window.location.pathname;
     const authUrl = await enoki.createAuthorizationURL({
       provider: "twitch",
       clientId: CLIENT_ID,
