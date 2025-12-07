@@ -129,6 +129,14 @@ export default function Page() {
       return;
     }
 
+    const totalSui = cartTotal();
+    const currentBalance = balance ? parseFloat(balance.replace(" SUI", "")) : 0;
+    
+    if (currentBalance < totalSui) {
+      setStatusMsg(`❌ Yetersiz bakiye! Bakiyeniz: ${currentBalance.toFixed(3)} SUI`);
+      return;
+    }
+
     setLoading(true);
     setStatusMsg(null);
 
@@ -136,7 +144,6 @@ export default function Page() {
       const signer = await enoki.getKeypair({ network: "testnet" });
       if (!signer) throw new Error("Cüzdan alınamadı");
 
-      const totalSui = cartTotal();
       const totalMist = BigInt(Math.floor(totalSui * 1_000_000_000));
 
       const tx = new Transaction();
@@ -405,7 +412,7 @@ export default function Page() {
 
             <div className="flex justify-center mb-6 bg-white p-4 rounded-xl border-2 border-gray-100">
               <QRCode
-                value={SHOP_ADDRESS}
+                value={`${SHOP_ADDRESS}:${Math.floor(totalSui * 1_000_000_000)}`}
                 size={200}
                 level="M"
               />
@@ -429,6 +436,12 @@ export default function Page() {
                   {qrCopied ? "✓" : "Kopyala"}
                 </button>
               </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <p className="text-xs text-blue-800 text-center">
+                💡 QR kod alıcı adresi ve tutarı içerir. Cüzdanınız desteklemiyorsa tutarı manuel girin.
+              </p>
             </div>
 
             <button
