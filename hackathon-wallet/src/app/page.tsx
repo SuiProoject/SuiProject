@@ -7,12 +7,12 @@ import { Transaction } from "@mysten/sui/transactions";
 import QRCode from "react-qr-code";
 
 // CONFIG TO DO: .env
-const ENOKI_API_KEY = process.env.REACT_APP_ENOKI_API_KEY!;
-const CLIENT_ID =     process.env.REACT_APP_CLIENT_ID!;
-const PACKAGE_ID =    process.env.REACT_APP_PACKAGE_ID!;
+const ENOKI_API_KEY = process.env.NEXT_PUBLIC_ENOKI_API_KEY!;
+const CLIENT_ID =     process.env.NEXT_PUBLIC_CLIENT_ID!;
+const PACKAGE_ID =    process.env.NEXT_PUBLIC_PACKAGE_ID!;
 const MODULE_NAME =   "payment";
 const FUNCTION_NAME = "send_sui";
-const SHOP_ADDRESS =  process.env.REACT_APP_SHOP_ADDRESS!;
+const SHOP_ADDRESS =  process.env.NEXT_PUBLIC_SHOP_ADDRESS!;
 
 const enoki = new EnokiFlow({ apiKey: ENOKI_API_KEY });
 const client = new SuiClient({ url: getFullnodeUrl("testnet") });
