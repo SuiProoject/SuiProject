@@ -41,39 +41,39 @@ export default function Page() {
   const storageKey = (addr: string | null) => `sui_coffee_${addr ?? "anon"}`;
 
   useEffect(() => {
-    (async () => {
+    const init = async () => {
       try {
-        // Twitch callback'i işle
+        // 1. Twitch'ten dönüşü yakala
         if (window.location.hash.includes("id_token")) {
-          try { 
-            await enoki.handleAuthCallback(); 
-            window.history.replaceState(null, "", window.location.pathname);
-            window.location.reload();
-            return;
-          } catch (err) {
-            console.error("Auth callback error:", err);
-          }
+          // Token'ı işle ve session oluştur
+          await enoki.handleAuthCallback();
+          
+          // URL'deki token karmaşasını temizle ama SAYFAYI YENİLEME
+          window.history.replaceState(null, "", window.location.pathname);
         }
 
-        // Cüzdan bilgisini al
+        // 2. Session oluşmuş mu kontrol et (Hem login sonrası hem normal girişte çalışır)
         const signer = await enoki.getKeypair({ network: "testnet" });
-        if (!signer) return;
         
-        const addr = signer.toSuiAddress();
-        setUserAddress(addr);
+        if (signer) {
+          const addr = signer.toSuiAddress();
+          setUserAddress(addr);
 
-        // Satın alma sayısını localStorage'dan yükle
-        const stored = localStorage.getItem(storageKey(addr));
-        setPurchaseCount(stored ? Number(stored) : 0);
+          // Satın alma sayısını yükle
+          const stored = localStorage.getItem(storageKey(addr));
+          setPurchaseCount(stored ? Number(stored) : 0);
 
-        // Bakiye sorgula
-        try {
+          // Bakiyeyi yükle
           const coins = await client.getCoins({ owner: addr });
           const total = coins.data.reduce((acc, c) => acc + Number(c.balance), 0);
           setBalance((total / 1e9).toFixed(3) + " SUI");
-        } catch {}
-      } catch {}
-    })();
+        }
+      } catch (err) {
+        console.error("Enoki başlatma hatası:", err);
+      }
+    };
+
+    init();
   }, []);
 
   const addToCart = (id: string) => {
